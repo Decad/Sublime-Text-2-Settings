@@ -1,0 +1,4 @@
+[
+  {"keys": ["ctrl+shift+r"], "command": "recess"},
+  {"keys": ["ctrl+alt+shift+r"], "command": "recess_compile"}
+]
