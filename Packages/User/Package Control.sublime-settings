@@ -1,11 +1,13 @@
 {
 	"installed_packages":
 	[
+		"AdvancedNewFile",
 		"Emmet",
 		"Jade",
 		"JSHint",
 		"LESS",
 		"Package Control",
+		"PlainTasks",
 		"Twitter Recess"
 	]
 }
