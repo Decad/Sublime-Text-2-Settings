@@ -1,11 +1,15 @@
 {
+	"auto_upgrade_last_run": null,
 	"installed_packages":
 	[
 		"AdvancedNewFile",
 		"Emmet",
+		"Handlebars",
 		"Jade",
+		"jQuery Snippets pack",
 		"JSHint",
 		"LESS",
+		"Markdown Preview",
 		"Package Control",
 		"PlainTasks",
 		"Twitter Recess"
