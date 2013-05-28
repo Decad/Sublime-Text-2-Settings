@@ -1,16 +1,16 @@
 {
   "selector": "source.js",
 
-  "cmd": ["jshint", "$file", "--config", "$packages/JSHint/.jshintrc", "--reporter", "$packages/JSHint/reporter.js"],
+  "cmd": ["jshint", "$file", "--reporter", "$packages/JSHint/reporter.js"],
 
-  "file_regex": "file:(.+)\\]",
-  "line_regex": "(\\d+),(\\d+)",
+  "file_regex": "JSHint: (.+)\\]",
+  "line_regex": "(\\d+),(\\d+): (.*)$",
 
   "osx": {
     "path": "/usr/local/share/npm/bin:/usr/local/bin:/opt/local/bin"
   },
 
   "windows": {
-    "cmd": ["jshint.cmd", "$file", "--config", "$packages\\JSHint\\.jshintrc", "--reporter", "$packages\\JSHint\\reporter.js"]
+    "cmd": ["jshint.cmd", "$file", "--reporter", "$packages\\JSHint\\reporter.js"]
   }
 }
