@@ -13,12 +13,15 @@ if int(sublime.version()) < 3000:
 
 class PlainTasksBase(sublime_plugin.TextCommand):
     def run(self, edit):
-        self.open_tasks_bullet = self.view.settings().get('open_tasks_bullet')
-        self.done_tasks_bullet = self.view.settings().get('done_tasks_bullet')
-        self.canc_tasks_bullet = self.view.settings().get('cancelled_tasks_bullet')
+        if self.view.settings().get('taskpaper_compatible'):
+            self.open_tasks_bullet = self.done_tasks_bullet = self.canc_tasks_bullet = '-'
+        else:
+            self.open_tasks_bullet = self.view.settings().get('open_tasks_bullet')
+            self.done_tasks_bullet = self.view.settings().get('done_tasks_bullet')
+            self.canc_tasks_bullet = self.view.settings().get('cancelled_tasks_bullet')
         self.before_tasks_bullet_spaces = ' ' * self.view.settings().get('before_tasks_bullet_margin')
         self.date_format = self.view.settings().get('date_format')
-        if self.view.settings().get('done_tag'):
+        if self.view.settings().get('done_tag') or self.view.settings().get('taskpaper_compatible'):
             self.done_tag = "@done"
             self.canc_tag = "@cancelled"
         else:
@@ -38,25 +41,30 @@ class PlainTasksNewCommand(PlainTasksBase):
         for region in selections:
             line = self.view.line(region)
             line_contents = self.view.substr(line).rstrip()
-            has_bullet = re.match('^(\s*)[' + re.escape(self.open_tasks_bullet) + re.escape(self.done_tasks_bullet) + re.escape(self.canc_tasks_bullet) + ']', self.view.substr(line))
+            has_bullet = re.match('^(\s*)(' + re.escape(self.open_tasks_bullet) + '|' + re.escape(self.done_tasks_bullet) + '|' + re.escape(self.canc_tasks_bullet) + ')', self.view.substr(line))
+            not_empty_line = re.match('^(\s*)(\S.+)$', self.view.substr(line))
+            empty_line     = re.match('^(\s+)$', self.view.substr(line))
+            current_scope  = self.view.scope_name(line.a)
             if has_bullet:
                 grps = has_bullet.groups()
                 line_contents = self.view.substr(line) + '\n' + grps[0] + self.open_tasks_bullet + ' '
-            elif ('header' or 'separator') in self.view.scope_name(line.b):
-                header = re.match('^(\s*)\S+', self.view.substr(line))
-                if header:
-                    grps = header.groups()
-                    line_contents = self.view.substr(line) + '\n' + grps[0] + self.before_tasks_bullet_spaces + self.open_tasks_bullet + ' '
-                else:
+            elif 'header' in current_scope:
+                grps = not_empty_line.groups()
+                line_contents = self.view.substr(line) + '\n' + grps[0] + self.before_tasks_bullet_spaces + self.open_tasks_bullet + ' '
+            elif 'separator' in current_scope:
+                grps = not_empty_line.groups()
+                line_contents = self.view.substr(line) + '\n' + grps[0] + self.before_tasks_bullet_spaces + self.open_tasks_bullet + ' '
+            elif not ('header' and 'separator') in current_scope:
+                if not_empty_line:
+                    grps = not_empty_line.groups()
+                    line_contents = (grps[0] if len(grps[0]) > 0 else self.before_tasks_bullet_spaces) + self.open_tasks_bullet + ' ' + grps[1]
+                elif empty_line: # only whitespaces
+                    grps = empty_line.groups()
+                    line_contents = grps[0] + self.open_tasks_bullet + ' '
+                else: # completely empty, no whitespaces
                     line_contents = self.before_tasks_bullet_spaces + self.open_tasks_bullet + ' '
             else:
-                has_space = re.match('^(\s+)(.*)', self.view.substr(line))
-                if has_space:
-                    grps = has_space.groups()
-                    spaces = grps[0]
-                    line_contents = spaces + self.open_tasks_bullet + ' ' + grps[1]
-                else:
-                    line_contents = self.before_tasks_bullet_spaces + self.open_tasks_bullet + ' ' + self.view.substr(line)
+                print('oops, need to improve PlainTasksNewCommand')
             self.view.replace(edit, line, line_contents)
 
         # convert each selection to single cursor, ready to type
@@ -82,17 +90,28 @@ class PlainTasksCompleteCommand(PlainTasksBase):
         for region in self.view.sel():
             line = self.view.line(region)
             line_contents = self.view.substr(line).rstrip()
-            rom = '^(\s*)' + re.escape(self.open_tasks_bullet) + '(\s*.*)$'
-            rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@done|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
-            rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@cancelled|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            if self.view.settings().get('taskpaper_compatible'):
+                rom = '^(\s*)-(\s*[^\b]*\s*)(?!\s@(done|cancelled))[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rdm = '^(\s*)-(\s*[^\b]*?\s*)(?=\s@done)[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rcm = '^(\s*)-(\s*[^\b]*?\s*)(?=\s@cancelled)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            else:
+                rom = '^(\s*)' + re.escape(self.open_tasks_bullet) + '(\s*.*)$'
+                rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@done|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@cancelled|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            started = '^\s*[^\b]*?\s*@started(\([\d\w,\.:\-\/ @]*\)).*$'
             open_matches = re.match(rom, line_contents, re.U)
             done_matches = re.match(rdm, line_contents, re.U)
             canc_matches = re.match(rcm, line_contents, re.U)
-            if open_matches:
+            started_matches = re.match(started, line_contents, re.U)
+            if open_matches and not (done_matches or canc_matches):
                 grps = open_matches.groups()
-                self.view.insert(edit, line.end(), done_line_end)
+                eol = self.view.insert(edit, line.end(), done_line_end)
                 replacement = u'%s%s%s' % (grps[0], self.done_tasks_bullet, grps[1].rstrip())
                 self.view.replace(edit, line, replacement)
+                if started_matches:
+                    start = datetime.strptime(started_matches.group(1), self.date_format)
+                    end = datetime.strptime(done_line_end.replace(' @done ', ''), self.date_format)
+                    self.view.insert(edit, line.end() + eol, ' @lasted(%s)' % str(end - start))
             elif done_matches:
                 grps = done_matches.groups()
                 replacement = u'%s%s%s' % (grps[0], self.open_tasks_bullet, grps[1].rstrip())
@@ -122,17 +141,28 @@ class PlainTasksCancelCommand(PlainTasksBase):
         for region in self.view.sel():
             line = self.view.line(region)
             line_contents = self.view.substr(line).rstrip()
-            rom = '^(\s*)' + re.escape(self.open_tasks_bullet) + '(\s*.*)$'
-            rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@done|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
-            rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@cancelled|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            if self.view.settings().get('taskpaper_compatible'):
+                rom = '^(\s*)-(\s*[^\b]*\s*)(?!\s@(done|cancelled))[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rdm = '^(\s*)-(\s*[^\b]*?\s*)(?=\s@done)[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rcm = '^(\s*)-(\s*[^\b]*?\s*)(?=\s@cancelled)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            else:
+                rom = '^(\s*)' + re.escape(self.open_tasks_bullet) + '(\s*.*)$'
+                rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@done|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+                rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '(\s*[^\b]*?\s*)(?=\s@cancelled|@project|\s\(|$)[\(\)\d\w,\.:\-\/ @]*\s*$'
+            started = '^\s*[^\b]*?\s*@started(\([\d\w,\.:\-\/ @]*\)).*$'
             open_matches = re.match(rom, line_contents, re.U)
             done_matches = re.match(rdm, line_contents, re.U)
             canc_matches = re.match(rcm, line_contents, re.U)
-            if open_matches:
+            started_matches = re.match(started, line_contents, re.U)
+            if open_matches and not (done_matches or canc_matches):
                 grps = open_matches.groups()
-                self.view.insert(edit, line.end(), canc_line_end)
+                eol = self.view.insert(edit, line.end(), canc_line_end)
                 replacement = u'%s%s%s' % (grps[0], self.canc_tasks_bullet, grps[1].rstrip())
                 self.view.replace(edit, line, replacement)
+                if started_matches:
+                    start = datetime.strptime(started_matches.group(1), self.date_format)
+                    end = datetime.strptime(canc_line_end.replace(' @cancelled ', ''), self.date_format)
+                    self.view.insert(edit, line.end() + eol, ' @wasted(%s)' % str(end - start))
             elif done_matches:
                 pass
                 # grps = done_matches.groups()
@@ -153,8 +183,12 @@ class PlainTasksCancelCommand(PlainTasksBase):
 
 class PlainTasksArchiveCommand(PlainTasksBase):
     def runCommand(self, edit):
-        rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '\s+.*$'
-        rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '\s+.*$'
+        if self.view.settings().get('taskpaper_compatible'):
+            rdm = '^(\s*)-(\s*[^\n]*?\s*)(?=\s@done)[\(\)\d\w,\.:\-\/ @]*\s*[^\n]$'
+            rcm = '^(\s*)-(\s*[^\n]*?\s*)(?=\s@cancelled)[\(\)\d\w,\.:\-\/ @]*\s*[^\n]$'
+        else:
+            rdm = '^(\s*)' + re.escape(self.done_tasks_bullet) + '\s+.*$'
+            rcm = '^(\s*)' + re.escape(self.canc_tasks_bullet) + '\s+.*$'
 
         # finding archive section
         archive_pos = self.view.find(self.archive_name, 0, sublime.LITERAL)
@@ -186,38 +220,34 @@ class PlainTasksArchiveCommand(PlainTasksBase):
                 self.view.insert(edit, self.view.size(), create_archive)
                 line = self.view.size()
 
-            projects = self.view.find_all('^\s*(\w+.+:\s*$\n?)|^\s*---.{3,5}---+$', 0)
+            projects = self.view.find_all('^\s*(\w+.+:\s*(\@[^\s]+(\(.*?\))?\s*)*$\n?)|^\s*---.{3,5}---+$', 0)
 
             # adding tasks to archive section
             for task in all_tasks:
-                match_task = re.match('^(\s*)(' + re.escape(self.done_tasks_bullet) + '|' + re.escape(self.canc_tasks_bullet) + ')(\s+.*$)', self.view.substr(task), re.U)
-                if match_task:
-                    if self.project_postfix:
-                        eol = self.view.insert(edit, line,
-                                               self.before_tasks_bullet_spaces +
-                                               self.view.substr(task).lstrip() +
-                                               (' @project(' if self.get_task_project(task, projects)[0] else '') +
-                                               self.get_task_project(task, projects)[1] +
-                                               (')' if self.get_task_project(task, projects)[0] else '')
-                                               + '\n')
-                    else:
-                        eol = self.view.insert(edit, line,
-                                               self.before_tasks_bullet_spaces +
-                                               match_task.group(2) + # bullet
-                                               (' ' if self.get_task_project(task, projects)[0] else '') +
-                                               self.get_task_project(task, projects)[1] +
-                                               (':' if self.get_task_project(task, projects)[0] else '') +
-                                               match_task.group(3) + # very task
-                                               '\n')
+                if self.view.settings().get('taskpaper_compatible'):
+                    match_task = re.match('^\s*(-)(\s*[^\n]*?)', self.view.substr(task), re.U)
                 else:
-                    eol = self.view.insert(edit, line,
-                                           self.before_tasks_bullet_spaces * 2 +
-                                           self.view.substr(task).lstrip() +
-                                           '\n')
-                line += eol
+                    match_task = re.match('^\s*(' + re.escape(self.done_tasks_bullet) + '|' + re.escape(self.canc_tasks_bullet) + ')(\s+.*$)', self.view.substr(task), re.U)
+                if match_task:
+                    pr = self.get_task_project(task, projects)
+                    if self.project_postfix:
+                        eol = (self.before_tasks_bullet_spaces + self.view.substr(task).lstrip() +
+                               (' @project(' if pr else '') + pr + (')' if pr else '') +
+                               '\n')
+                    else:
+                        eol = (self.before_tasks_bullet_spaces +
+                               match_task.group(1) + # bullet
+                               (' ' if pr else '') + pr + (':' if pr else '') +
+                               match_task.group(2) + # very task
+                               '\n')
+                else:
+                    eol = self.before_tasks_bullet_spaces * 2 + self.view.substr(task).lstrip() + '\n'
+                line += self.view.insert(edit, line, eol)
+
             # remove moved tasks (starting from the last one otherwise it screw up regions after the first delete)
             for task in reversed(all_tasks):
                 self.view.erase(edit, self.view.full_line(task))
+            self.view.run_command('plain_tasks_sort_by_date')
 
     def get_task_project(self, task, projects):
         index = -1
@@ -228,9 +258,9 @@ class PlainTasksArchiveCommand(PlainTasksBase):
                 break
         #if there is no projects for task - return empty string
         if index == -1:
-            return (False, '')
+            return ''
 
-        prog = re.compile('^\n*([ \t]*).+:')
+        prog = re.compile('^\n*(\s*)(.+):\s*(\@[^\s]+(\(.*?\))?\s*)*')
         hierarhProject = ''
 
         if index >= 0:
@@ -240,7 +270,7 @@ class PlainTasksArchiveCommand(PlainTasksBase):
                 if prog.match(strProject):
                     spaces = prog.match(strProject).group(1)
                     if len(spaces) < len(depth):
-                        hierarhProject = strProject.strip().strip(':') + ((" / " + hierarhProject) if hierarhProject else '')
+                        hierarhProject = prog.match(strProject).group(2) + ((" / " + hierarhProject) if hierarhProject else '')
                         depth = spaces
                         if len(depth) == 0:
                             break
@@ -253,9 +283,9 @@ class PlainTasksArchiveCommand(PlainTasksBase):
                             break
                 index -= 1
         if not hierarhProject:
-            return (False, '')
+            return ''
         else:
-            return (True, hierarhProject)
+            return hierarhProject
 
     def get_task_note(self, task, tasks):
         note_line = task.end() + 1
@@ -355,3 +385,36 @@ class PlainTasksOpenLinkCommand(sublime_plugin.TextCommand):
         if match:
             fn, sym = match.group('fn', 'sym')
             self.show_panel_or_open(fn, sym)
+
+
+class PlainTasksSortByDate(PlainTasksBase):
+    def runCommand(self, edit):
+        archive_pos = self.view.find(self.archive_name, 0, sublime.LITERAL)
+        if archive_pos:
+            have_date = '(^\s*[^\n]*?\s\@(?:done|cancelled)\s*(\([\d\w,\.:\-\/ ]*\))[^\n]*$)'
+            tasks_prefixed_date = []
+            tasks = self.view.find_all(have_date, archive_pos.b-1, "\\2\\1", tasks_prefixed_date)
+            notes = []
+            for ind, task in enumerate(tasks):
+                note_line = task.end() + 1
+                while self.view.scope_name(note_line) == 'text.todo notes.todo ':
+                    note = self.view.line(note_line)
+                    notes.append(note)
+                    tasks_prefixed_date[ind] += '\n' + self.view.substr(note)
+                    note_line = note.end() + 1
+            to_remove = tasks+notes
+            to_remove.sort()
+            for i in reversed(to_remove):
+                self.view.erase(edit, self.view.full_line(i))
+            tasks_prefixed_date.sort(reverse=self.view.settings().get('new_on_top'))
+            eol = archive_pos.end()
+            for a in tasks_prefixed_date:
+                eol += self.view.insert(edit, eol, '\n' + re.sub('^\([\d\w,\.:\-\/ ]*\)([^\b]*$)', '\\1', a))
+        else:
+            sublime.status_message("Nothing to sort")
+
+
+class PlainTaskInsertDate(PlainTasksBase):
+    def runCommand(self, edit):
+        for s in reversed(list(self.view.sel())):
+            self.view.insert(edit, s.b, datetime.now().strftime(self.date_format))

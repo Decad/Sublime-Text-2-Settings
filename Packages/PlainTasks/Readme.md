@@ -13,6 +13,7 @@ To install this plugin, you have two options:
 Bring up the command palette (it's `⌘ + shift + p`  in OS X and `ctrl + shift + p` in Windows) and type `task` and select `Tasks: New document` command. 
 
 **NOTE:** Save your todo files with `todo`, `todolist`, `tasks` or `taskpaper` file extensions or just name them `TODO` with no extension.
+For more portability you can use `todolist.txt` either as a filename or as suffix for any arbitrary filename.
 
 ## Usage
 **NOTE:** In windows or Linux use `ctrl` instead of `⌘`
@@ -36,6 +37,11 @@ Bring up the command palette (it's `⌘ + shift + p`  in OS X and `ctrl + shift 
 ☐ PlainTasks comes with a simple snippet for creating separators, if you feel that your task list is becoming too long you can split it into several sections (and fold some of them) using this snippet:
 
 `--` and then `tab key` will give you this: `--- ✄ -----------------------`
+
+☐ Couple of tags are in completion rules:  
+
+- type `s`, press tab key — it'll become `@started` — press tab again and current date will be inserted, when you'll complete or cancel a task with such tag, you'll know how many time has passed since start;
+- type `t`, press tab key — it'll become `@today` — this one is highlighted differently than other tags, you can easily spot which task is important.
 
 ☐ You can create a link to a file within your project by prefixing the file name with a pound sign like: `#filename`.  
   In SublimeText 3 you can even specify a symbol inside that file by using @ symbol like: `#filename@symbol`.  
@@ -68,6 +74,7 @@ Here is a list of PlainTasks' specific settings:
 | **project_tag**                | true             | Postfix archived task with project tag, otherwise prefix                |
 | **archive_name**               | `Archive:`       | Make sure it is the unique project name within your todo files          |
 | **indent_after_task**          | true             | Determines whether next line after task should be indented or not       |
+| **new_on_top**                 | true             | How to sort archived tasks (done_tag=true and default date_format are required)|
 
 
 
@@ -80,9 +87,7 @@ add these settings to the json file:
   "before_tasks_bullet_margin": 0,
   "tab_size": 2,
   "translate_tabs_to_spaces": false,
-  "open_tasks_bullet": "-",
-  "done_tasks_bullet": "-",
-  "cancelled_tasks_bullet": "-"
+  "taskpaper_compatible": true
 }
 ```
 
